@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Chennai Flood Prediction Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+    }
+    h2.title {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background-color: rgba(255, 255, 255, 0.9);
+      padding: 8px 16px;
+      border-radius: 8px;
+      z-index: 1000;
+      font-size: 1.25rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .legend {
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .legend-item {
+      margin: 5px 0;
+    }
+    .color-box {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      margin-right: 8px;
+      border: 1px solid #666;
+    }
+  </style>
+</head>
+<body>
+  <h2 class="title"> Chennai Flood Prediction </h2>
+  <div id="map"></div>
+
+  <script>
+    const map = L.map("map").setView([13.0827, 80.2707], 11);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors"
+    }).addTo(map);
+
+    // Style function for flood zones
+    function getFloodZoneStyle(riskLevel) {
+      const colors = {
+        high: '#ef4444',
+        moderate: '#f59e0b',
+        low: '#10b981'
+      };
+      
+      return {
+        fillColor: colors[riskLevel] || '#3b82f6',
+        color: '#1e40af',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.5
+      };
+    }
+
+    // Create legend
+    const legend = L.control({ position: 'bottomright' });
+    legend.onAdd = function () {
+      const div = L.DomUtil.create('div', 'legend');
+      div.innerHTML = `
+        <h4 style="margin: 0 0 10px 0">Flood Risk Levels</h4>
+        <div class="legend-item">
+          <span class="color-box" style="background: #ef4444"></span>High Risk
+        </div>
+        <div class="legend-item">
+          <span class="color-box" style="background: #f59e0b"></span>Moderate Risk
+        </div>
+        <div class="legend-item">
+          <span class="color-box" style="background: #10b981"></span>Low Risk
+        </div>
+      `;
+      return div;
+    };
+    legend.addTo(map);
+
+    // Process flood prediction data
+    fetch("http://localhost:8000/api/flood-prediction")
+      .then(response => response.json())
+      .then(data => {
+        // Create GeoJSON layer for flood zones
+        const floodZones = L.geoJSON(data, {
+          style: (feature) => getFloodZoneStyle(feature.properties.riskLevel),
+          onEachFeature: (feature, layer) => {
+            if (feature.properties) {
+              layer.bindPopup(`
+                <strong>Risk Level:</strong> ${feature.properties.riskLevel}<br>
+                <strong>Probability:</strong> ${feature.properties.probability}%
+              `);
+            }
+          }
+        }).addTo(map);
+
+        // Fit map to flood zones
+        map.fitBounds(floodZones.getBounds());
+      })
+      .catch(error => {
+        console.error("Error loading flood prediction data:", error);
+        // Show error message on map
+        L.popup()
+          .setLatLng(map.getCenter())
+          .setContent("Error loading flood prediction data")
+          .openOn(map);
+      });
+  </script>
+</body>
+</html>
